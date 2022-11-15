@@ -1,56 +1,60 @@
+import { toHTML } from '@portabletext/to-html';
 import * as React from 'react';
 import ContentEditable from 'react-contenteditable';
+import { Blocks, Block } from 'types';
 import { last } from 'utils/array';
 import { v4 as uuidv4 } from 'uuid';
 import { HandleIcon } from '../Icons';
-
-// import { Context } from '../Provider';
+import { Context } from '../Provider';
 
 export const Editor: React.FC = () => {
+  const { value, setValue, selectedFile } = React.useContext(Context);
   const blockStackRef = React.useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = React.useState<'saving' | 'saved' | 'ready'>(
+    'ready'
+  );
   const [focus, setFocus] = React.useState<string>();
-  // const { value, setValue, selectedFile } = React.useContext(Context);
   const [blocks, setBlocks] = React.useState<Blocks>([]);
 
   const defaultBlock = React.useCallback<() => Block>(
     () => ({
-      id: uuidv4(),
-      html: '',
-      tag: 'p',
+      _key: uuidv4(),
+      _type: 'p',
+      children: []
     }),
     []
   );
 
-  const addBlock = React.useCallback(({ id }) => {
+  const addBlock = React.useCallback(({ _key }: BlockHandlerParams) => {
     const newBlock = defaultBlock();
 
     setBlocks((prev) => {
-      const index = prev.findIndex((p) => p.id === id) + 1;
+      const index = prev.findIndex((p) => p._key === _key) + 1;
       prev.splice(index, 0, newBlock);
       return [...prev];
     });
 
-    setFocus(newBlock.id);
+    setFocus(newBlock._key);
   }, []);
 
-  const deleteBlock = React.useCallback(({ id }) => {
+  const deleteBlock = React.useCallback(({ _key }: BlockHandlerParams) => {
     setBlocks((prev) => {
-      const index = prev.findIndex((p) => p.id === id);
-      setFocus(prev[index - 1]?.id);
-      return prev.filter((p) => p.id !== id);
+      const index = prev.findIndex((p) => p._key === _key);
+      setFocus(prev[index - 1]?._key);
+      return prev.filter((p) => p._key !== _key);
     });
   }, []);
 
   const focusLast = React.useCallback(() => {
     const lastBlock = last(blocks);
-    setFocus(lastBlock.id);
+    setFocus(lastBlock._key);
   }, [blocks]);
 
   React.useEffect(() => {
     if (!blocks.length) {
       const newBlock = defaultBlock();
       setBlocks([newBlock]);
-      setFocus(newBlock.id);
+      setFocus(newBlock._key);
     }
   }, [blocks]);
 
@@ -70,8 +74,29 @@ export const Editor: React.FC = () => {
     }
   }, [focus]);
 
+  React.useEffect(() => {
+    function fileSaved() {
+      setSaving('saved');
+      setTimeout(() => {
+        setSaving('ready');
+      }, 300);
+    }
+    window.electron.ipcRenderer.on('saveFile', fileSaved);
+
+    return function cleanup() {
+      window.electron.ipcRenderer.off('saveFile', fileSaved);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!value) return;
+    setBlocks(value.blocks);
+  }, [value])
+
   const handleChange = () => {
     console.log(blocks);
+    setSaving('saving');
+    window.electron.saveFile(blocks);
   };
 
   return (
@@ -80,9 +105,10 @@ export const Editor: React.FC = () => {
       ref={blockStackRef}
       id="BlockStack"
     >
+      <p>{saving}</p>
       {blocks.map((block) => (
         <Block
-          key={block.id}
+          key={block._key}
           {...block}
           addBlock={addBlock}
           deleteBlock={deleteBlock}
@@ -100,44 +126,41 @@ const Block: React.FC<
     deleteBlock: (params: BlockHandlerParams) => void;
     handleChange: () => void;
   }
-> = ({ addBlock, deleteBlock, handleChange, id, ...block }) => {
+> = ({ addBlock, deleteBlock, handleChange, _key, ...block }) => {
   const ref = React.useRef<Ref>(null);
-  const [htmlBackup, setHtmlBackup] = React.useState<string>(block.html);
-  const [html, setHtml] = React.useState<string>(block.html);
 
   const handleKeyPress = React.useCallback(
     (e) => {
-      if (e.key === '/') {
-        setHtmlBackup(html);
-      }
+      if (!_key) return;
       console.log(e);
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         addBlock({
-          id,
+          _key,
           ref,
         });
       }
       handleChange();
-      console.log(html);
+      // console.log(html);
     },
-    [html, id, ref]
+    [_key, ref]
   );
 
   const handleKeyDown = React.useCallback(
     (e) => {
-      const text = e.target.textContent;
+      const text = e.target?.textContent;
+      if (!_key) return;
       if (e.key === 'Backspace' && text.length <= 1) {
         deleteBlock({
-          id,
+          _key,
           ref,
         });
       }
     },
-    [id, ref]
+    [_key, ref]
   );
 
-  const handlePaste = React.useCallback((e: React.ClipboardEvent) => {
+  const handlePaste = React.useCallback((e) => {
     console.log(e);
     // Stop data from being pasted
     e.stopPropagation();
@@ -148,22 +171,20 @@ const Block: React.FC<
     console.log(pastedData);
   }, []);
 
-  React.useEffect(() => {}, [html]);
-
   return (
     <div className="group relative">
       <button className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-0 left-0">
         <HandleIcon />
       </button>
       <ContentEditable
-        id={id}
+        id={_key}
         innerRef={ref}
-        html={html}
-        tagName={block.tag}
+        html={toHTML(block)}
+        tagName={block._type}
         disabled={false}
         className="outline-none p-1 pl-10 font-serif text-2xl"
         onChange={(e) => {
-          setHtml(e.target.value);
+          // setHtml(e.target.value);
         }}
         onKeyPress={handleKeyPress}
         onKeyDown={handleKeyDown}
@@ -173,14 +194,6 @@ const Block: React.FC<
   );
 };
 
-type Blocks = Array<Block>;
-
-type Block = {
-  id: string;
-  html: string;
-  tag: 'p';
-};
-
-type BlockHandlerParams = { id: string; ref: BlockRef };
+type BlockHandlerParams = { _key: string; ref: BlockRef };
 type BlockRef = React.MutableRefObject<Ref>;
 type Ref = HTMLDivElement | null;

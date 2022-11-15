@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { Blocks } from 'types';
 
 export type Channels = 'ipc-example';
 
@@ -8,9 +9,11 @@ contextBridge.exposeInMainWorld('electron', {
   getFileTree: () => ipcRenderer.send('getFileTree'),
   // authenticate: (code) => ipcRenderer.send('authenticate', code),
   newFile: (name: string) => ipcRenderer.send('newFile', name),
-  renameFile: (id: string, oldName: string, newName: string) => ipcRenderer.send('renameFile', id, oldName, newName),
-  deleteFile: (name:string) => ipcRenderer.send('deleteFile', name),
+  renameFile: (id: string, oldName: string, newName: string) =>
+    ipcRenderer.send('renameFile', id, oldName, newName),
+  deleteFile: (name: string) => ipcRenderer.send('deleteFile', name),
   selectFile: (name: string) => ipcRenderer.send('selectFile', name),
+  saveFile: (data: Blocks) => ipcRenderer.send('saveFile', data),
   getToken: (code: string) => ipcRenderer.send('token'),
   ipcRenderer: {
     sendMessage(channel: Channels, args: unknown[]) {

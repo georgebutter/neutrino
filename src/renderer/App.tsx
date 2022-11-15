@@ -5,6 +5,7 @@ import { Home } from './templates/Home';
 import './App.css';
 import { Provider } from './components/Provider';
 import { client } from 'utils/graph';
+import { Blocks } from 'types';
 
 // TODO: implement theme changing
 // const applyLight = () => {
@@ -87,6 +88,7 @@ declare global {
       renamedFile: (id: string) => void;
       selectFile: (name: string) => void;
       deleteFile: (name: string) => void;
+      saveFile: (data: Blocks) => void;
       // authenticate: (code: string) => void;
       getToken: () => string;
       getFileTree: () => Array<string>;

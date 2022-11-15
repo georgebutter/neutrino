@@ -3,12 +3,13 @@ import { GET_REPO } from 'graphql/queries';
 import { client } from 'utils/graph';
 import { Maybe } from 'utils/maybe';
 import { GetRepoQuery } from 'types/github';
+import { FileJson } from 'types';
 
 export const Context = React.createContext<ContextState>({
   selectedFile: undefined,
   areaRef: undefined,
   setValue: undefined,
-  value: '',
+  value: undefined,
   selectFile: () => {
     console.error('selectFile not defined');
   },
@@ -19,12 +20,12 @@ export const Context = React.createContext<ContextState>({
   login: undefined,
 });
 
-export const Provider: React.FC = ({ children }) => {
+export const Provider: React.FC<Props> = ({ children }) => {
   const [login, setLogin] = React.useState<string>();
   const [repo, setRepo] = React.useState<string>();
   const [token, setToken] = React.useState<string>();
   const [error, setError] = React.useState<Maybe<string>>();
-  const [value, setValue] = React.useState<string>('');
+  const [value, setValue] = React.useState<Maybe<FileJson>>();
   const [selectedFile, setSelectedFile] = React.useState<string>();
 
   const selectFile = (name: string) => {
@@ -40,9 +41,9 @@ export const Provider: React.FC = ({ children }) => {
   };
 
   React.useEffect(() => {
-    function handleFileSelect(md: string) {
-      console.log(md);
-      setValue(md);
+    function handleFileSelect(json: FileJson) {
+      console.log(json);
+      setValue(json);
       document.getElementById('TextArea')?.focus();
     }
 
@@ -123,8 +124,8 @@ export type ContextState = {
   selectFile: (name: string) => void;
   deleteFile: () => void;
   selectedFile?: string;
-  value: string;
-  setValue?: React.Dispatch<React.SetStateAction<string>>;
+  value: Maybe<FileJson>;
+  setValue?: React.Dispatch<React.SetStateAction<Maybe<FileJson>>>;
   areaRef?: React.RefObject<HTMLTextAreaElement>;
   token: Maybe<string>;
   login: Maybe<string>;

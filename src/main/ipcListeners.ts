@@ -1,14 +1,29 @@
 import { ipcMain, shell } from 'electron';
 import fsPromises from 'fs/promises';
-import fs from 'fs';
+import fs, { WriteStream } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { pipeline } from 'stream';
+import { Blocks, FileJson } from 'types';
 import { BACKEND } from '../utils/constants';
 import { resolvePath } from '../utils/paths';
 import { systemPreferences } from '../utils/storage';
 import { Logger } from '../utils/logger';
 
+const fileToJson = async (fileName: string): Promise<FileJson> => {
+  const buff = await fsPromises.readFile(fileName);
+  const str = buff.toString();
+  const json = JSON.parse(str);
+  return json;
+};
+
+const jsonToFile = async (fileName: string, data: FileJson) => {
+  await fsPromises.writeFile(fileName, JSON.stringify(data));
+};
+
 export const ipcListeners = () => {
   const logger = new Logger();
+  let writePath: string;
+
   /**
    * Initializes the login flow
    */
@@ -23,9 +38,13 @@ export const ipcListeners = () => {
     event.reply('logout');
   });
 
-  ipcMain.on('saveFile', (event, id) => {
-    const filePath = resolvePath([`${id}.json`]);
-    // TODO
+  ipcMain.on('saveFile', async (event, blocks: Blocks) => {
+    const json = await fileToJson(writePath);
+    const newJson: FileJson = {
+      ...json,
+      blocks,
+    };
+    jsonToFile(writePath, newJson);
     event.reply('saveFile');
   });
 
@@ -43,7 +62,7 @@ export const ipcListeners = () => {
         title,
         blocks: [],
       };
-      await fsPromises.writeFile(fileName, JSON.stringify(data));
+      await jsonToFile(fileName, data);
       event.reply('newFile', id);
     } catch (e) {
       event.reply('error', e);
@@ -58,24 +77,17 @@ export const ipcListeners = () => {
       const newFileName = resolvePath([`${id}.${newTitle}.json`]);
       fsPromises.rename(oldFileName, newFileName);
 
-      const buff = await fsPromises.readFile(newFileName);
-      const str = buff.toString();
-      const json = JSON.parse(str);
-      await fsPromises.writeFile(
-        newFileName,
-        JSON.stringify({ ...json, title: newTitle })
-      );
-
+      const json = await fileToJson(newFileName);
+      await jsonToFile(newFileName, { ...json, title: newTitle });
       event.reply('renamedFile', id);
     }
   );
 
   ipcMain.on('selectFile', async (event, name) => {
     const fileName = resolvePath([`${name}.json`]);
-    const buff = await fsPromises.readFile(fileName);
-    const json = buff.toString();
-
+    const json = await fileToJson(fileName);
     event.reply('selectFile', json);
+    writePath = fileName;
   });
 
   ipcMain.on('deleteFile', (event, name) => {
