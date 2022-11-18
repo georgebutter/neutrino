@@ -1,11 +1,35 @@
-import { toHTML } from '@portabletext/to-html';
 import * as React from 'react';
+import { toHTML } from '@portabletext/to-html';
+import Schema from '@sanity/schema'
+import { htmlToBlocks } from '@sanity/block-tools';
 import ContentEditable from 'react-contenteditable';
 import { Blocks, Block } from 'types';
 import { last } from 'utils/array';
 import { v4 as uuidv4 } from 'uuid';
 import { HandleIcon } from '../Icons';
 import { Context } from '../Provider';
+
+const defaultSchema = Schema.compile({
+  name: 'Neutrino',
+  types: [
+    {
+      type: 'object',
+      name: 'note',
+      fields: [
+        {
+          title: 'Body',
+          name: 'body',
+          type: 'array',
+          of: [{type: 'block'}]
+        }
+      ]
+    }
+  ]
+});
+
+const blockContentType = defaultSchema.get('note')
+  .fields.find(field => field.name === 'body').type
+
 
 export const Editor: React.FC = () => {
   const { value, setValue, selectedFile } = React.useContext(Context);
@@ -93,8 +117,16 @@ export const Editor: React.FC = () => {
     setBlocks(value.blocks);
   }, [value])
 
-  const handleChange = () => {
-    console.log(blocks);
+  const handleChange = (html: string, index: number) => {
+    console.log(index)
+    const newBlocks = htmlToBlocks(html, blockContentType);
+    console.log(newBlocks)
+    if (!newBlocks.length) return;
+    setBlocks((prev) => {
+      prev[index].children = newBlocks[0].children;
+      console.log(prev)
+      return prev
+    })
     setSaving('saving');
     window.electron.saveFile(blocks);
   };
@@ -106,9 +138,10 @@ export const Editor: React.FC = () => {
       id="BlockStack"
     >
       <p>{saving}</p>
-      {blocks.map((block) => (
+      {blocks.map((block, index) => (
         <Block
           key={block._key}
+          index={index}
           {...block}
           addBlock={addBlock}
           deleteBlock={deleteBlock}
@@ -119,14 +152,15 @@ export const Editor: React.FC = () => {
     </div>
   );
 };
-
+// f63d3c251948
 const Block: React.FC<
   Block & {
+    index: number;
     addBlock: (params: BlockHandlerParams) => void;
     deleteBlock: (params: BlockHandlerParams) => void;
-    handleChange: () => void;
+    handleChange: (html: string, index: number) => void;
   }
-> = ({ addBlock, deleteBlock, handleChange, _key, ...block }) => {
+> = ({ addBlock, deleteBlock, handleChange, _key, index, ...block }) => {
   const ref = React.useRef<Ref>(null);
 
   const handleKeyPress = React.useCallback(
@@ -140,7 +174,7 @@ const Block: React.FC<
           ref,
         });
       }
-      handleChange();
+      // handleChange(e.target.value);
       // console.log(html);
     },
     [_key, ref]
@@ -180,11 +214,12 @@ const Block: React.FC<
         id={_key}
         innerRef={ref}
         html={toHTML(block)}
-        tagName={block._type}
+        tagName={'div'}
         disabled={false}
         className="outline-none p-1 pl-10 font-serif text-2xl"
         onChange={(e) => {
-          // setHtml(e.target.value);
+          ////TODODDODOD
+          handleChange(e.target.value, index)
         }}
         onKeyPress={handleKeyPress}
         onKeyDown={handleKeyDown}
